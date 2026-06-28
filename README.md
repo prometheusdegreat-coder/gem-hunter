@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/29438186/README.md)
 # Gem Hunter Bot
 
 Real-time BNB + Solana gem scanner using DEXScreener API.
