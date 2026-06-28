@@ -9,9 +9,15 @@ from datetime import datetime, timezone
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
-BSCSCAN_API_KEY     = os.getenv("BSCSCAN_API_KEY", "")
-SOLANA_RPC          = os.getenv("SOLANA_RPC", "https://api.mainnet-beta.solana.com")
+# #gems  — A and A+ only. High conviction, take action alerts.
+DISCORD_GEMS   = os.getenv("DISCORD_GEMS", "")
+
+# #radar — Pre-launch, first trade, B/C grade watches.
+#           Raw signal, do your own research before acting.
+DISCORD_RADAR  = os.getenv("DISCORD_RADAR", "")
+
+BSCSCAN_API_KEY = os.getenv("BSCSCAN_API_KEY", "")
+SOLANA_RPC      = os.getenv("SOLANA_RPC", "https://api.mainnet-beta.solana.com")
 
 # DEXScreener fallback scan interval
 DEXSCREENER_INTERVAL = 6   # seconds
@@ -254,19 +260,25 @@ def age_min(pair):
 # ─────────────────────────────────────────────
 # DISCORD
 # ─────────────────────────────────────────────
-def send_discord(embed):
-    if not DISCORD_WEBHOOK_URL:
-        print("  ⚠️  DISCORD_WEBHOOK_URL not set")
+def send_discord(embed, channel="radar"):
+    """
+    channel = "gems"  -> #gems  (A / A+ action alerts only)
+    channel = "radar" -> #radar (pre-launch, first trade, B/C watches)
+    """
+    url = DISCORD_GEMS if channel == "gems" else DISCORD_RADAR
+    if not url:
+        label = "#gems" if channel == "gems" else "#radar"
+        print(f"  ⚠️  {label} webhook not set")
         return
     try:
-        r = requests.post(DISCORD_WEBHOOK_URL, json={"embeds": [embed]}, timeout=10)
+        r = requests.post(url, json={"embeds": [embed]}, timeout=10)
         if r.status_code == 429:
             time.sleep(5)
-            requests.post(DISCORD_WEBHOOK_URL, json={"embeds": [embed]}, timeout=10)
+            requests.post(url, json={"embeds": [embed]}, timeout=10)
         elif r.status_code not in (200, 204):
-            print(f"  ⚠️  Discord {r.status_code}: {r.text[:80]}")
+            print(f"  ⚠️  Discord [{channel}] {r.status_code}: {r.text[:80]}")
     except Exception as e:
-        print(f"  ⚠️  Discord error: {e}")
+        print(f"  ⚠️  Discord [{channel}] error: {e}")
 
 def build_embed(pair, gem, risk, grade, action, color, mom, narr_label,
                 narr_score, source, deployer="", first_buyers=None):
@@ -428,7 +440,8 @@ def process_pair(pair, source="dexscreener"):
 
     embed = build_embed(pair, gem, risk, grade, action, color, mom,
                         narr_label, narr_score, source, deployer, first_buyers)
-    send_discord(embed)
+    channel = "gems" if grade in ("A+", "A") else "radar"
+    send_discord(embed, channel)
 
 # ─────────────────────────────────────────────
 # SOURCE 1 — PUMP.FUN WebSocket (Solana)
@@ -489,7 +502,7 @@ class PumpFunListener:
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                         "footer": {"text": "Gem Hunter Pro v5 • Pump.fun PRE-LAUNCH"}
                     }
-                    send_discord(embed)
+                    send_discord(embed, "radar")
 
             # Trade event — token now has price data
             elif data.get("txType") in ("buy", "sell"):
@@ -538,7 +551,7 @@ class PumpFunListener:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "footer": {"text": "Gem Hunter Pro v5 • Pump.fun FIRST TRADE"}
                 }
-                send_discord(embed)
+                send_discord(embed, "radar")
 
     def on_error(self, ws, error):
         print(f"  [PUMPFUN] WebSocket error: {error}")
@@ -602,7 +615,7 @@ def main():
     print("  🔥 GEM HUNTER PRO v5 — Multi-Source Hunter")
     print("  Sources: Pump.fun WS + DEXScreener")
     print(f"  Chains: SOLANA (pre-launch) + BNB")
-    print(f"  Discord: {'✅ configured' if DISCORD_WEBHOOK_URL else '❌ NOT SET'}")
+    print(f"  Discord: {'✅ configured' if DISCORD_GEMS else '❌ NOT SET'}")
     print(f"  BSCScan: {'✅ dev wallet ON' if BSCSCAN_API_KEY else '⚠️  not set'}")
     print("=" * 50)
 
